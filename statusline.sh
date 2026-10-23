@@ -1,6 +1,6 @@
 #!/bin/bash
 # Source: https://github.com/daniel3303/ClaudeCodeStatusLine
-# Single line: Model | tokens | %used | %remain | think | 5h bar @reset | 7d bar @reset | extra
+# Single line: [session name |] Model | tokens | %used | %remain | think | 5h bar @reset | 7d bar @reset | extra
 
 set -f  # disable globbing
 VERSION="1.4.4"
@@ -71,6 +71,9 @@ version_gt() {
     return 1
 }
 # ===== Extract data from JSON =====
+# Session name, set with /rename (absent when the session is unnamed)
+session_name=$(echo "$input" | jq -r '.session_name // empty')
+
 model_name=$(echo "$input" | jq -r '.model.display_name // "Claude"')
 model_name=$(echo "$model_name" | sed 's/ *(\([0-9.]*[kKmM]*\) context)/ \1/')  # "(1M context)" → "1M"
 
@@ -134,6 +137,7 @@ fi
 
 # ===== Build single-line output =====
 out=""
+[ -n "$session_name" ] && out+="${purple}${session_name}${reset} ${dim}|${reset} "
 out+="${blue}${model_name}${reset}"
 
 # Current working directory

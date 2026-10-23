@@ -10,6 +10,7 @@ A custom status line for [Claude Code](https://claude.com/claude-code) that disp
 
 | Segment | Description |
 |---------|-------------|
+| **Session** | Session name set with `/rename`, shown first; omitted for unnamed sessions |
 | **Model** | Current model name (e.g., Opus 4.7) |
 | **CWD@Branch** | Current folder name, git branch, and file changes (+/-) |
 | **Tokens** | Used / total context window tokens (% used) |
