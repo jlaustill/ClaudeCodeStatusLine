@@ -1,6 +1,6 @@
 #!/bin/bash
 # Source: https://github.com/daniel3303/ClaudeCodeStatusLine
-# Single line: [session name |] Model (effort) | dir@branch | tokens (%used) | 5h @reset | 7d @reset | extra | CLI version
+# Single line: [session name |] Model[(advisor)] (effort) | dir@branch | tokens (%used) | 5h @reset | 7d @reset | extra | CLI version
 
 set -f  # disable globbing
 VERSION="1.4.5"
@@ -92,6 +92,42 @@ session_name=$(echo "$input" | jq -r '.session_name // empty')
 model_name=$(echo "$input" | jq -r '.model.display_name // "Claude"')
 model_name=$(echo "$model_name" | sed 's/ *(\([0-9.]*[kKmM]*\) context)/ \1/')  # "(1M context)" → "1M"
 
+# ===== Advisor model, as this session uses it =====
+# The status line JSON has no advisor field, so read what the session sends.
+# Each main-thread "api-request" entry in the transcript names the request
+# shape it used, and that shape's tool list holds the advisor tool and its
+# model. No advisor tool means the session has none: /advisor off, the
+# CLAUDE_CODE_DISABLE_ADVISOR_TOOL variable, or a main model it can't pair
+# with. The saved advisorModel setting is never used, because --advisor and
+# mid-session changes make it differ from what the session actually sends.
+advisor_model_id() {
+    local transcript="$1" shape_hash reverse_cat="tac"
+    [ -n "$transcript" ] && [ -r "$transcript" ] || return 0
+    command -v tac >/dev/null 2>&1 || reverse_cat="tail -r"
+    shape_hash=$($reverse_cat "$transcript" 2>/dev/null \
+        | grep -m1 -E '^\{"type":"api-request",.*"querySource":"repl_main_thread[":]' \
+        | jq -r '.shapeHash // empty' 2>/dev/null)
+    [ -n "$shape_hash" ] || return 0
+    grep -F "\"shapeHash\":\"$shape_hash\"" "$transcript" 2>/dev/null \
+        | grep -m1 -F '"type":"api-request-shape"' \
+        | jq -r '[.shape.tools[]? | select(.name == "advisor") | .model][0] // empty' 2>/dev/null
+}
+
+# Display name for a model ID from Claude Code's cached model catalog,
+# e.g. claude-fable-5-2 -> "Fable 5.2", or the ID itself when it isn't listed
+model_display_name() {
+    local catalog_dir="$claude_config_dir/cache/model-catalog" catalog name=""
+    catalog=$(ls -t "$catalog_dir" 2>/dev/null | grep -m1 '\.json$')
+    [ -n "$catalog" ] && name=$(jq -r --arg id "$1" \
+        '[.catalog.config.models[]? | select(.id == $id) | .name][0] // empty' \
+        "$catalog_dir/$catalog" 2>/dev/null)
+    printf '%s' "${name:-$1}"
+}
+
+advisor_segment=""
+advisor_id=$(advisor_model_id "$(echo "$input" | jq -r '.transcript_path // empty')")
+[ -n "$advisor_id" ] && advisor_segment="${dim}(${reset}${blue}$(model_display_name "$advisor_id")${reset}${dim})${reset}"
+
 # Context window
 size=$(echo "$input" | jq -r '.context_window.context_window_size // 200000')
 [ "$size" -eq 0 ] 2>/dev/null && size=200000
@@ -153,7 +189,7 @@ fi
 # ===== Build single-line output =====
 out=""
 [ -n "$session_name" ] && out+="${purple}${session_name}${reset} ${dim}|${reset} "
-out+="${blue}${model_name}${reset} ${dim}(${reset}"
+out+="${blue}${model_name}${reset}${advisor_segment} ${dim}(${reset}"
 case "$effort_level" in
     low)    out+="${dim}${effort_level}${reset}" ;;
     medium) out+="${orange}med${reset}" ;;
