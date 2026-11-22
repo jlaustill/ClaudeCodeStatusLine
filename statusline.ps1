@@ -90,6 +90,9 @@ function Test-VersionGreaterThan([string]$a, [string]$b) {
 # ===== Extract data from JSON =====
 $data = $input | ConvertFrom-Json
 
+# Session name, set with /rename (absent when the session is unnamed)
+$sessionName = if ($data.session_name) { [string]$data.session_name } else { "" }
+
 $modelName = if ($data.model.display_name) { $data.model.display_name } else { "Claude" }
 $modelName = ($modelName -replace '\s*\((\d+\.?\d*[kKmM])\s+context\)', ' $1').Trim()  # "(1M context)" → "1M"
 

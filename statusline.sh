@@ -86,6 +86,9 @@ version_gt() {
     return 1
 }
 # ===== Extract data from JSON =====
+# Session name, set with /rename (absent when the session is unnamed)
+session_name=$(echo "$input" | jq -r '.session_name // empty')
+
 model_name=$(echo "$input" | jq -r '.model.display_name // "Claude"')
 model_name=$(echo "$model_name" | sed 's/ *(\([0-9.]*[kKmM]*\) context)/ \1/')  # "(1M context)" → "1M"
 
