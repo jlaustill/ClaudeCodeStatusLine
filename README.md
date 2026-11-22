@@ -12,6 +12,7 @@ A custom status line for [Claude Code](https://claude.com/claude-code) that disp
 |---------|-------------|
 | **Session** | Session name set with `/rename`, shown first; omitted for unnamed sessions |
 | **Model** | Current model name with reasoning effort in parentheses (e.g., Opus 4.7 (high)); effort is low, med, high, xhigh or max |
+| **Advisor** | The advisor model this session uses, in parentheses right after the model name (e.g., Opus 5.5(Fable 5.2) (max)). Read from the session transcript, so it follows `--advisor`, `/advisor` and `CLAUDE_CODE_DISABLE_ADVISOR_TOOL`; omitted when the session has no advisor or has not sent a request yet. After `/advisor` or `/model` it updates with the next request. `statusline.sh` only; the Windows script does not show it yet |
 | **CWD@Branch** | Current folder name, git branch, and file changes (+/-) |
 | **Tokens** | Used / total context window tokens (% used) |
 | **5h** | 5-hour rate limit usage percentage and reset time |
