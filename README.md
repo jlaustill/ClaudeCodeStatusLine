@@ -20,6 +20,8 @@ A custom status line for [Claude Code](https://claude.com/claude-code) that disp
 
 Usage percentages are color-coded: green (<50%) → yellow (≥50%) → orange (≥70%) → red (≥90%).
 
+Pace compares usage with how much of the window has elapsed: `5h 30%(20%)` means usage is running 20% ahead of the clock (on track to hit the limit before the reset), and `(-15%)` means 15% behind it. It is omitted when it can't be computed, e.g. right at the start of a window.
+
 ## Installation
 
 Ask Claude Code:
