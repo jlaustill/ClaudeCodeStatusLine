@@ -167,6 +167,7 @@ if (-not $cliVersion) {
 
 # ===== Build single-line output =====
 $out = ""
+if ($sessionName) { $out += "${purple}${sessionName}${reset} ${dim}|${reset} " }
 $out += "${blue}${modelName}${reset} ${dim}(${reset}"
 switch ($effortLevel) {
     "low"    { $out += "${dim}${effortLevel}${reset}" }

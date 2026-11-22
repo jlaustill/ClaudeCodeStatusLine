@@ -1,6 +1,6 @@
 #!/bin/bash
 # Source: https://github.com/daniel3303/ClaudeCodeStatusLine
-# Single line: Model (effort) | dir@branch | tokens (%used) | 5h @reset | 7d @reset | extra | CLI version
+# Single line: [session name |] Model (effort) | dir@branch | tokens (%used) | 5h @reset | 7d @reset | extra | CLI version
 
 set -f  # disable globbing
 VERSION="1.4.5"
@@ -152,6 +152,7 @@ fi
 
 # ===== Build single-line output =====
 out=""
+[ -n "$session_name" ] && out+="${purple}${session_name}${reset} ${dim}|${reset} "
 out+="${blue}${model_name}${reset} ${dim}(${reset}"
 case "$effort_level" in
     low)    out+="${dim}${effort_level}${reset}" ;;
