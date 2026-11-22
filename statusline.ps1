@@ -1,7 +1,7 @@
 # Source: https://github.com/daniel3303/ClaudeCodeStatusLine
 
-$VERSION = "1.4.4"
-# Single line: Model | tokens | %used | %remain | think | 5h bar @reset | 7d bar @reset | extra
+$VERSION = "1.4.5"
+# Single line: Model (effort) | dir@branch | tokens (%used) | 5h @reset | 7d @reset | extra | CLI version
 
 # Read input from stdin
 $input = @($Input) -join "`n"
@@ -48,6 +48,27 @@ function Get-UsageColor([int]$pct) {
     elseif ($pct -ge 70) { return $orange }
     elseif ($pct -ge 50) { return $yellow }
     else { return $green }
+}
+
+# Pace vs the window: "(23%)" = used 23% faster than time has elapsed toward
+# the reset, "(-2%)" = 2% slower. Empty when undefined: usage outside 0..100,
+# reset not in (now, now + window], or no time elapsed yet.
+# $reset is a Unix epoch, an ISO 8601 string, or a DateTime (PS7's
+# ConvertFrom-Json turns ISO strings into DateTime).
+function Format-PaceSuffix([object]$usedPct, [object]$reset, [long]$windowSeconds) {
+    if ($null -eq $usedPct -or $null -eq $reset -or "$reset" -eq "null" -or "$reset" -eq "") { return "" }
+    try {
+        if ($reset -is [datetime]) { $resetEpoch = ([DateTimeOffset]$reset).ToUnixTimeSeconds() }
+        elseif ("$reset" -match '^\d+$') { $resetEpoch = [double]"$reset" }
+        else { $resetEpoch = [DateTimeOffset]::Parse("$reset").ToUnixTimeSeconds() }
+        $used = [double]$usedPct
+        $left = $resetEpoch - [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        if ($used -lt 0 -or $used -gt 100 -or $left -le 0 -or $left -gt $windowSeconds) { return "" }
+        $elapsed = ($windowSeconds - $left) / $windowSeconds
+        if ($elapsed -le 0) { return "" }
+        $pace = [math]::Round(($used / 100 / $elapsed - 1) * 100)
+        return "(" + $pace.ToString([Globalization.CultureInfo]::InvariantCulture) + "%)"
+    } catch { return "" }
 }
 
 # Null coalescing helper for PowerShell 5 compatibility (?? is PS7+ only)
@@ -146,8 +167,16 @@ if (-not $cliVersion) {
 
 # ===== Build single-line output =====
 $out = ""
-if ($sessionName) { $out += "${purple}${sessionName}${reset} ${dim}|${reset} " }
-$out += "${blue}${modelName}${reset}"
+$out += "${blue}${modelName}${reset} ${dim}(${reset}"
+switch ($effortLevel) {
+    "low"    { $out += "${dim}${effortLevel}${reset}" }
+    "medium" { $out += "${orange}med${reset}" }
+    "high"   { $out += "${green}${effortLevel}${reset}" }
+    "xhigh"  { $out += "${purple}${effortLevel}${reset}" }
+    "max"    { $out += "${red}${effortLevel}${reset}" }
+    default  { $out += "${green}${effortLevel}${reset}" }
+}
+$out += "${dim})${reset}"
 
 # Current working directory
 $cwd = $data.cwd
@@ -180,16 +209,6 @@ if ($cwd) {
 
 $out += " ${dim}|${reset} "
 $out += "${orange}${usedTokens}/${totalTokens}${reset} ${dim}(${reset}${green}${pctUsed}%${reset}${dim})${reset}"
-$out += " ${dim}|${reset} "
-$out += "effort: "
-switch ($effortLevel) {
-    "low"    { $out += "${dim}${effortLevel}${reset}" }
-    "medium" { $out += "${orange}med${reset}" }
-    "high"   { $out += "${green}${effortLevel}${reset}" }
-    "xhigh"  { $out += "${purple}${effortLevel}${reset}" }
-    "max"    { $out += "${red}${effortLevel}${reset}" }
-    default  { $out += "${green}${effortLevel}${reset}" }
-}
 
 # ===== OAuth token resolution =====
 function Get-OAuthToken {
@@ -380,7 +399,7 @@ if ($effectiveBuiltin) {
         $fiveHourColor = Get-UsageColor $fiveHourPct
         $out += "${sep}${white}5h${reset} ${fiveHourColor}${fiveHourPct}%${reset}"
         $fiveHourReset = Format-EpochResetTime $builtinFiveHourReset "time"
-        if ($fiveHourReset) { $out += " ${dim}@${fiveHourReset}${reset}" }
+        if ($fiveHourReset) { $out += (Format-PaceSuffix $builtinFiveHourPct $builtinFiveHourReset 18000) + " ${dim}@${fiveHourReset}${reset}" }
     }
 
     if ($null -ne $builtinSevenDayPct) {
@@ -388,7 +407,7 @@ if ($effectiveBuiltin) {
         $sevenDayColor = Get-UsageColor $sevenDayPct
         $out += "${sep}${white}7d${reset} ${sevenDayColor}${sevenDayPct}%${reset}"
         $sevenDayReset = Format-EpochResetTime $builtinSevenDayReset "datetime"
-        if ($sevenDayReset) { $out += " ${dim}@${sevenDayReset}${reset}" }
+        if ($sevenDayReset) { $out += (Format-PaceSuffix $builtinSevenDayPct $builtinSevenDayReset 604800) + " ${dim}@${sevenDayReset}${reset}" }
     }
 
     # Render extra_usage from API cache (stdin rate_limits doesn't expose it)
@@ -431,7 +450,7 @@ if ($effectiveBuiltin) {
         $fiveHourColor = Get-UsageColor $fiveHourPct
 
         $out += "${sep}${white}5h${reset} ${fiveHourColor}${fiveHourPct}%${reset}"
-        if ($fiveHourReset) { $out += " ${dim}@${fiveHourReset}${reset}" }
+        if ($fiveHourReset) { $out += (Format-PaceSuffix $parsedUsage.five_hour.utilization $fiveHourResetIso 18000) + " ${dim}@${fiveHourReset}${reset}" }
 
         # ---- 7-day (weekly) ----
         $sevenDayPct = [math]::Floor([double](Coalesce $parsedUsage.seven_day.utilization 0))
@@ -440,7 +459,7 @@ if ($effectiveBuiltin) {
         $sevenDayColor = Get-UsageColor $sevenDayPct
 
         $out += "${sep}${white}7d${reset} ${sevenDayColor}${sevenDayPct}%${reset}"
-        if ($sevenDayReset) { $out += " ${dim}@${sevenDayReset}${reset}" }
+        if ($sevenDayReset) { $out += (Format-PaceSuffix $parsedUsage.seven_day.utilization $sevenDayResetIso 604800) + " ${dim}@${sevenDayReset}${reset}" }
 
         $out += Format-ExtraUsage $parsedUsage
     } catch {}
